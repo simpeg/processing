@@ -3,7 +3,7 @@ Software for time-series analysis, spectral analysis and transfer function compu
 
 ## Why
 
-TODO: purpose of the library. See #1
+TODO: purpose of the library.
 
 ## Scope
 - Time series processing 
