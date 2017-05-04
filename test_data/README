@@ -14,3 +14,12 @@ The files can be read with:
 
 If cloning MTpy, be sure to checkout the 'beta' branch, that is the one that is most up to date.
 
+Or you can load it with numpy
+
+[1]: import numpy as np
+[2]: ts = np.loadtxt(file_name, skip_row=1)
+[3]: # read in header
+[4]: with open(file_name, 'r') as fid:
+         header_line = fid.readline()
+[5]: station, comp, df, st, ns, lat, lon, elev = header_line.strip().split()
+
