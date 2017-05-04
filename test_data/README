@@ -1,0 +1,9 @@
+README
+------------
+
+The time series data are sampled at 256 samples/s.  
+
+The header has the following format:
+
+station_name, component, sampling_rate, start_time_in_epoch_seconds, num_samples, latitude, longitude, elevation
+
