@@ -7,3 +7,10 @@ The header has the following format:
 
 station_name, component, sampling_rate, start_time_in_epoch_seconds, num_samples, latitude, longitude, elevation
 
+The files can be read with:
+
+[1]: from mtpy.utils import filehandling as mtfh
+[2]: ts = mtfh.read_ts_file(file_name)
+
+If cloning MTpy, be sure to checkout the 'beta' branch, that is the one that is most up to date.
+
