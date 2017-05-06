@@ -17,8 +17,8 @@ processing
     :target: https://codecov.io/gh/simpeg/processing
     :alt: coverage status
 
-.. image:: https://img.shields.io/github/license/simpeg/simpeg.svg
-    :target: https://github.com/simpeg/discretize/blob/master/LICENSE
+.. image:: https://img.shields.io/github/license/simpeg/processing.svg
+    :target: https://github.com/simpeg/processing/blob/master/LICENSE
     :alt: MIT license
 
 .. image:: https://www.quantifiedcode.com/api/v1/project/316a139919e44bce902270568a3f8222/badge.svg
