@@ -25,6 +25,10 @@ processing
    :target: https://www.quantifiedcode.com/app/project/316a139919e44bce902270568a3f8222
    :alt: Code issues
 
+.. image:: https://api.codacy.com/project/badge/Grade/4fc959a5294a418fa21fc7bc3b3aa078
+    :target: https://www.codacy.com/app/lindseyheagy/processing?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=simpeg/processing&amp;utm_campaign=Badge_Grade
+    :alt: codacy
+
 
 Software for time-series analysis, spectral analysis and transfer function computation from geophysical data.
 
