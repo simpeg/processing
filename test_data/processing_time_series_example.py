@@ -52,6 +52,22 @@ for ii, ts_fn in enumerate(ts_fn_list):
 
 # sort out to make sure all time series have the same station name, 
 # start time and sampling rate
+sampling_rates = list(sorted(set(ts_header_arr['sampling_rate'])))
+start_times = list(sorted(set(ts_header_arr['start_time'])))
+station_names = list(sorted(ts_header_arr['station']))
+
+n_ts = len(start_times)
+max_npts = ts_header_arr['npts'].max()
+
+ts_arr = np.zeros(n_ts, dtype=[('ex', (np.float, (max_npts))),
+                               ('ey', (np.float, (max_npts))),
+                               ('hx', (np.float, (max_npts))),
+                               ('hy', (np.float, (max_npts)))]) 
+    
+for h_arr in ts_header_arr:
+    ts_arr[0][h_arr['comp'].lower()][0:h_arr['npts']] = np.loadtxt(h_arr['fn'], 
+                                                                   skiprows=1)
+
 
 
 
