@@ -1,0 +1,7 @@
+numpy
+scipy
+matplotlib
+sphinx
+sphinx_rtd_theme
+nose
+nose-cov
