@@ -17,8 +17,8 @@ import numpy as np
 import pandas as pd
 import scipy.signal as signal
 
-import gis_tools as gis_tools
-import ts_filter as mtfilter
+import mtpy.utils.gis_tools as gis_tools
+import mtpy.processing.filter as mtfilter
 
 import matplotlib.pyplot as plt
 
