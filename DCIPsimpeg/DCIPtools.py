@@ -285,33 +285,141 @@ class ensembleKernal(baseKernel):
 
     def __init__(self, filtershape,
                  number_half_periods, **kwargs):
-        baseKernel.__init__(self, filtershape, **kwargs)
+        filter_kernal = createHanningWindow(filtershape.size)   # mod for tappered overlap
+        baseKernel.__init__(self, filter_kernal, **kwargs)          # create the base kernal
+        self.number_half_periods = number_half_periods              # number of half t in signal
+        self.kernal_ends = self.createFilterKernalEnds(filtershape.size)  # create end kernal
 
-        self.number_half_periods = number_half_periods
+    def createFilterKernalEnds(self, ensemble_size):
+        """
+        creates the filter kernal
+
+        """
+        ends_window = createHanningWindow(ensemble_size - 2)
+        print(ends_window.size)
+        if ends_window.size > 1:
+            # create the filter kernal
+            tkernal = np.ones((3, 1))
+            tkernal[1] = -2.0                    # 3 point kernal
+            bsgn = np.ones((1, ends_window.size))
+            bsgn[0, 1::2] = bsgn[0, 1::2] * -1   # alternate pol rem lin drift
+            bwtd = np.matmul(tkernal,
+                             bsgn * ends_window)  # filter weights
+            tmp1 = np.arange(1, 4)
+            tmp1 = np.reshape(tmp1, (3, 1))
+            tmp2 = np.ones((1, ends_window.size))
+            tmp3 = np.ones((3, 1))
+            tmp4 = np.arange(ends_window.size)
+            tmp4 = np.reshape(tmp4, (1, ends_window.size))
+            knew = (np.matmul(tmp1, tmp2) +
+                    np.matmul(tmp3, (tmp4 * (ends_window.size + 3))))
+            btmp = np.zeros((ends_window.size + 2,
+                             ends_window.size))  # create zero matrix
+            shape_knew = knew.shape
+            num_elements_kn = shape_knew[0] * shape_knew[1]
+            knew = np.reshape(knew, num_elements_kn, order='F')
+            shape = btmp.shape
+            num_elements = shape[0] * shape[1]
+            btmp = np.reshape(btmp, num_elements, order='F')
+            shape_bwtd = bwtd.shape
+            num_elements_b = shape_bwtd[0] * shape_bwtd[1]
+            bwtd = np.reshape(bwtd, num_elements_b, order='F')
+            for idx in range(knew.size):
+                btmp[int(knew[idx]) - 1] = bwtd[idx]  # fill diag w/ weights
+            btmp = np.reshape(btmp, shape, order='F')
+            tHK = np.sum(btmp, 1)
+            norm_tHK = np.sum(np.abs(tHK))
+            tHK = tHK / norm_tHK
+            tHK = np.reshape(tHK, (tHK.size, 1))
+        else:
+            raise Exception('filter size must be greater than 3!')
+            tHK = np.zeros(1)
+        return tHK
 
     def _transform(self, signal):
         """
-           performs the stacking calculation
+           performs the stacking calculation using Ensembles
         """
+        sub_signals = []
+        sub_samples = []
         size_of_stack = int(signal.size / (self.number_half_periods))
-        T_per_ensemble = np.floor(self.number_half_periods /
-                                  self.filtershape.size)
-        new_signal_size = int(T_per_ensemble * size_of_stack *
-                              self.filtershape.size)
-        print(T_per_ensemble)
-        trim_signal = signal[:new_signal_size]      # resizes signal
-        print(trim_signal.size)
-        samples_per_ens = int(T_per_ensemble * size_of_stack)
-        print("samples per ensemble", samples_per_ens)
-        ensemble_matrix = np.reshape(trim_signal, (samples_per_ens,
-                                     int(self.filtershape.size)),
-                                     order='F')
-        stack = np.zeros((size_of_stack, self.filtershape.size))
-        print(self.kernel.size)
-        # for idx in range(self.filtershape.size):
-        #     Ax = np.reshape(ensemble_matrix[:, idx], (int(size_of_stack),
-        #                     int(T_per_ensemble)), order='F')
-        #     stack[:, idx] = np.matmul(Ax, self.kernel)  # create stack data
+        overlap = 2                                                        # hard code standard
+        T_per_ensemble = (self.kernel.size - overlap)                 # desired half T
+        new_signal_size = int((T_per_ensemble) * size_of_stack)            # size of the signal going in
+        samples_per_ens = int((T_per_ensemble + overlap) * size_of_stack)
+        number_of_ensembles = signal.size / (T_per_ensemble * size_of_stack)
+        opt_number_of_samples = number_of_ensembles * T_per_ensemble * size_of_stack
+        print "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernal_ends.size)
+        signal = signal[:opt_number_of_samples]
+        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks 
+        for index in range(number_of_ensembles):
+            if index == 0:
+                T_overlap = T_per_ensemble                                # get end overlap
+                end_index = T_overlap * size_of_stack
+                trim_signal = signal[:end_index]
+                sub_signals.append(trim_signal)
+                sub_samples.append(np.arange(0, end_index))
+                Ax = np.reshape(trim_signal, (int(size_of_stack),
+                                int(self.kernal_ends.size)), order='F')
+                shape_Ax = Ax.shape
+                shape_tHK = self.kernal_ends.shape
+                if shape_Ax[1] == shape_tHK[0]:
+                    stack = np.matmul(Ax, self.kernal_ends)  # create stack data
+                    ensembles[:, index] = stack.T
+                else:
+                    print("fail stack, wrong size")
+            elif index == 1:
+                T_overlap = T_per_ensemble + overlap
+                start_index = size_of_stack * (T_per_ensemble - 2)
+                end_index = start_index + (T_overlap * size_of_stack)
+                trim_signal = signal[start_index:end_index]
+                sub_signals.append(trim_signal)
+                sub_samples.append(np.arange(start_index, end_index))
+                print "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernel.size)
+                Ax = np.reshape(trim_signal, (int(size_of_stack),
+                                int(self.kernel.size)), order='F')
+                shape_Ax = Ax.shape
+                shape_tHK = self.kernel.shape
+                if shape_Ax[1] == shape_tHK[0]:
+                    stack = np.matmul(Ax, self.kernel)  # create stack data
+                    ensembles[:, index] = stack.T
+                else:
+                    print("fail stack, wrong size")
+            elif index == (number_of_ensembles - 1):
+                T_overlap = T_per_ensemble + overlap                   # get end overlap
+                start_index = (index * (T_per_ensemble) - 2) * size_of_stack
+                trim_signal = signal[start_index:]
+                sub_signals.append(trim_signal)
+                sub_samples.append(np.arange(start_index, signal.size))
+                Ax = np.reshape(trim_signal, (int(size_of_stack),
+                                int(self.kernel.size)), order='F')
+                shape_Ax = Ax.shape
+                shape_tHK = self.kernel.shape
+                print("size of last: {0}, with overlap: {1}".format(start_index, signal.size))
+                if shape_Ax[1] == shape_tHK[0]:
+                    stack = np.matmul(Ax, self.kernel)  # create stack data
+                    ensembles[:, index] = stack.T
+                else:
+                    print("fail stack, wrong size in last")
+            else:
+                T_overlap = T_per_ensemble + overlap
+                start_index = (((index) * T_per_ensemble) - 2) * size_of_stack
+                end_index = start_index + (T_overlap * size_of_stack)
+                trim_signal = signal[start_index:end_index]
+                sub_signals.append(trim_signal)
+                sub_samples.append(np.arange(start_index, end_index))
+                print("size of first: {0}, with overlap: {1}".format(start_index, signal.size))
+                Ax = np.reshape(trim_signal, (int(size_of_stack),
+                                int(self.kernel.size)), order='F')
+                shape_Ax = Ax.shape
+                shape_tHK = self.kernel.shape
+                if shape_Ax[1] == shape_tHK[0]:
+                    stack = np.matmul(Ax, self.kernel)  # create stack data
+                    ensembles[:, index] = stack.T
+                else:
+                    print("fail stack, wrong size")
+        ensembles[:, ::2] = ensembles[:, ::2] * -1   # make all stacks same polarity
+        return ensembles, sub_signals, sub_samples
 
 
 ##################################################
@@ -587,7 +695,7 @@ def createHanningWindow(num_points):
     num_points = number of taps for the requested window
 
     """
-    num_points = num_points - 2
+    # num_points = num_points - 2
     indx1 = np.arange(1, num_points + 1).T          # create  sequence array
     filterWindow = 0.5 * (1 - np.cos((2 * np.pi /
                           (indx1.size - 1)) * indx1))  # creates window
@@ -706,96 +814,6 @@ def loadDias(fileName):
     patch.assignHeaderInfo(headers)
     return patch
 
-######################################################
-# Define Classes
-
-
-class dcipTimeSeries:
-    """
-    Class containing Source information
-
-    Input:
-    sample_rate = number of samples/sec
-    time_base = period of base frequency
-    data = a numpy array containing the data
-    """
-    def __init__(self, sample_rate, time_base, data):
-        self.timebase = time_base
-        self.samplerate = sample_rate
-        self.data
-        # determine samples per period and half period
-        self.sampPerT = time_base * sample_rate
-        self.sampPerHalfT = self.sampPerT / 2.0
-
-    def stack(self):
-        """
-        simple brute stack algorithm
-
-        """
-        rectime = self.data.size / self.samplerate   # time of signal
-        T = self.timebase                            # determine Period T
-        numT = np.floor(rectime / T)                 # number of T
-        nStacks = np.floor(numT * 2)                 # number of stacks
-        tmp = np.ones(int(nStacks - 4))
-        tmp = tmp * 4
-        # create the +ve/-ve
-        for i in range(tmp.size):
-            tmp[i] = tmp[i] * (pow((-1), (i + 2)))
-
-        # create full filter kernal
-        f1 = np.zeros(tmp.size + 4)
-        f1[0] = 1
-        f1[1] = -3
-        f1[f1.size - 2] = 3 * (pow((-1), nStacks - 2))
-        f1[f1.size - 1] = pow((-1), nStacks - 1)
-
-        for j in range(tmp.size):
-            f1[j + 2] = tmp[j]
-
-        f1 = f1 / (4.0 * (nStacks - 2))
-        sizef2 = int(self.sampPerHalfT)
-        f2 = np.zeros((sizef2, sizef2))
-        for k in range(sizef2):
-            f2[k, k] = 1
-        filterK = sparse.kron(f1, f2).todense()    # filter kernal
-
-        # trim the data in case of extra samples
-        trimdata = np.zeros(int(filterK.shape[1]))
-        for idx in range(int(filterK.shape[1])):
-            trimdata[idx] = self.data[idx]
-
-        # now do the stack calculation
-        stackD = np.matmul(filterK, trimdata)      # calculate stack
-
-        data_stack = np.zeros(stackD.size)
-        for idx in range(stackD.size):
-            data_stack[idx] = stackD[0, idx]
-        # return the amplitude
-        return data_stack
-
-    def ensembleStackTimeSeries(self, filterKernal):
-        """
-        TODO
-        Input:
-        filterKernal = a numpy array consisting of filter kernal
-                note: the size of the filter Kernal will be used
-                to determine how many ensembles.
-                e.g Hanning, Kaiser, etc...
-        error_allowance = std of acceptance of decay
-        """
-        self.data = 100. / 1000
-
-    def statRejectTimeSeries(self, error_allowance):
-        """
-        TODO
-        Input:
-        filterKernal = a numpy array consisting of filter kernal
-                e.g Hanning, Kaiser, etc...
-        error_allowance = std of acceptance of decay
-        """
-        self.data = 100. / 1000
-
-
 # ===================================================
 # Dias Data specific class
 class JinDipole:
@@ -808,10 +826,6 @@ class JinDipole:
     """
 
     def __init__(self, InDpInfo):
-        try:
-            self.Tx1 = float(InDpInfo.Tx1)
-        except:
-            pass
         self.Tx1East = float(InDpInfo.Tx1East)
         self.Tx1North = float(InDpInfo.Tx1North)
         self.Tx1Elev = float(InDpInfo.Tx1Elev)
@@ -820,6 +834,32 @@ class JinDipole:
         self.Tx2Elev = float(InDpInfo.Tx2Elev)
         self.In = float(InDpInfo.In)
         self.In_err = float(InDpInfo.In_err)
+
+    def getTxStack(self, stack_dir):
+        rec_num = self.reading
+        bin_file = stack_dir + "P1_R"+ rec_num + "_TX.raw"
+
+        f = open(bin_file, "rb")          # open the file
+        lines = f.read()                  # read data as string (can modify this to get header info
+        return_char = 0.                  # beginning of binary data idex
+        for idx in range(100):
+            if lines[idx] == "\r":
+                return_char = idx
+        bin_start = return_char + 2       # increment 2 spaces to start of binary data
+        data = []                         # initiate array for data
+        with open(bin_file, 'rb') as f:   # open file for data extraction
+            f.seek(bin_start,
+                   os.SEEK_SET)          # seek to beginning of binary data
+            while True:
+                b = f.read(8)             # read 8 bytes at a time
+                if not b:                 # break out if end of file
+                    # eof
+                    break
+                data.append(
+                    struct.unpack('d',
+                                  b))  # store data
+
+        return data
 
 
 class JvoltDipole:
@@ -830,12 +870,7 @@ class JvoltDipole:
 
     def __init__(self, VoltDpinfo):
         self.dipole = VoltDpinfo.DIPOLE
-        try:
-            self.Rx1 = float(VoltDpinfo.Rx1)
-        except:
-            pass
         self.Rx1File = VoltDpinfo.Rx1File
-        # self.Rx1Relay = VoltDpinfo.Rx1Relay
         self.Rx1East = float(VoltDpinfo.Rx1East)
         self.Rx1North = float(VoltDpinfo.Rx1North)
         self.Rx1Elev = float(VoltDpinfo.Rx1Elev)
@@ -843,7 +878,6 @@ class JvoltDipole:
         self.Rx2East = float(VoltDpinfo.Rx2East)
         self.Rx2North = float(VoltDpinfo.Rx2North)
         self.Rx2Elev = float(VoltDpinfo.Rx2Elev)
-        # self.Rx2Relay = VoltDpinfo.Rx2Relay
         try:
             self.Vp = float(VoltDpinfo.Vp)
         except:
@@ -863,19 +897,74 @@ class JvoltDipole:
         self.TimeBase = VoltDpinfo.TimeBase
         self.Vs = np.asarray(VoltDpinfo.Vs)
 
+    def getDipoleStack(self, stack_dir):
+        node1_id = self.Rx1File[:2]
+        node2_id = self.Rx2File[:2]
+        rec_num = self.reading
+        bin_file = stack_dir + "P1_R"+ rec_num + "_" + node1_id + "_" + node2_id + ".stk"
+
+        f = open(bin_file, "rb")          # open the file
+        lines = f.read()                  # read data as string (can modify this to get header info
+        return_char = 0.                  # beginning of binary data idex
+        for idx in range(100):
+            if lines[idx] == "\r":
+                return_char = idx
+        bin_start = return_char + 2       # increment 2 spaces to start of binary data
+        data = []                         # initiate array for data
+        with open(bin_file, 'rb') as f:   # open file for data extraction
+            f.seek(bin_start,
+                   os.SEEK_SET)           # seek to beginning of binary data
+            while True:
+                b = f.read(8)             # read 8 bytes at a time
+                if not b:                 # break out if end of file
+                    # eof
+                    break
+                data.append(
+                    struct.unpack('d',
+                                  b))  # store data
+                # if len(b) < 8:
+                #     break
+        return data
+
     def getXplotpoint(self, Idp):
-        if (self.Rx1 > Idp.Tx1):
-            x = Idp.Tx1 + ((self.Rx1 - Idp.Tx1) / 2.0)
-        elif (self.Rx1 < self.Idp):
-            x = Idp.Tx1 - ((Idp.Tx1 - self.Rx1) / 2.0)
-        return[x]
+        if (self.Rx1x > Idp.Tx1x):
+            x = Idp.Tx1x + ((self.Rx1x - Idp.Tx1x) / 2.0)
+        elif (self.Rx1x < Idp.Tx1x):
+            x = Idp.Tx1x - ((Idp.Tx1x - self.Rx1x) / 2.0)
+        return x
+
+    def getYplotpoint(self, Idp):
+        if (self.Rx1y > Idp.Tx1y):
+            y = Idp.Tx1y + ((self.Rx1y - Idp.Tx1y) / 2.0)
+        elif (self.Rx1y < Idp.Tx1y):
+            y = Idp.Tx1y - ((Idp.Tx1y - self.Rx1y) / 2.0)
+        return y
 
     def getZplotpoint(self, Idp):
-        z = -(abs(Idp.Tx1 - self.Rx1)) / 2.0
-        return[z]
+        r = np.sqrt((Idp.Tx1x - self.Rx2x)**2 +
+                    (Idp.Tx1y - self.Rx2y)**2 +
+                    (Idp.Tx1Elev - self.Rx2Elev)**2)
+        # z = -(abs(Idp.Tx1 - self.Rx1)) / 2.0
+        z = -(r / 3.)
+        return z
 
-    def calcRho(self):
-        return[self.Rho]
+    def calcRho(self, Idp):
+        r1 = ((self.Rx1x - self.Tx1x)**2 +
+            (self.Rx1y - self.Tx1y)**2 +
+            (self.Rx1Elev - self.Tx1Elev)**2)**0.5
+        r2 = ((self.Rx2x - self.Tx1x)**2 +
+            (self.Rx2y - self.Tx1y)**2 +
+            (self.Rx2Elev - self.Tx1Elev)**2)**0.5
+        r3 = ((self.Rx1x - self.Tx2x)**2 +
+            (self.Rx1y - self.Tx2y)**2 +
+            (self.Rx1Elev - self.Tx2Elev)**2)**0.5
+        r4 = ((self.Rx2x - self.Tx2x)**2 +
+            (self.Rx2y - self.Tx2y)**2 +
+            (self.Rx2Elev - self.Tx2Elev)**2)**0.5
+        gf = 1 / (( 1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
+        rho = (self.Vp / Idp.Vp) * 2 * np.pi * gf 
+        self.Rho = rho
+        return rho
 
 
 class Jreading:
@@ -940,6 +1029,172 @@ class Jpatch:
             self.window_width[i] = (self.window_end[i] -
                                     self.window_start[i])
 
+    def getApparentResistivity(self):
+        """
+        Exports all the apparent resistivity data
+
+        Output:
+        numpy array [value]
+
+        """
+        resistivity_list = []
+        num_rdg = len(self.readings)
+        for k in range(num_rdg):
+            num_dipole = len(self.readings[k].Vdp)
+            for j in range(num_dipole):
+                if self.readings[k].Vdp[j].flagRho == "Accept":
+                    rho_a = self.readings[k].Vdp[j].Rho
+                    resistivity_list.append(rho_a)
+        return np.asarray(resistivity_list)
+
+    def getGeometricFactor(self):
+        """
+        Exports all the geometry factor data
+
+        Output:
+        numpy array [value]
+
+        """
+        k_list = []
+        num_rdg = len(self.readings)
+        for k in range(num_rdg):
+            num_dipole = len(self.readings[k].Vdp)
+            for j in range(num_dipole):
+                if (self.readings[k].Vdp[j].flagRho == "Accept" and (2e5 > self.readings[k].Vdp[j].K > 5)):
+                    k_a = self.readings[k].Vdp[j].K
+                    k_list.append(k_a)
+        return np.asarray(k_list)
+
+    def getVoltages(self):
+        """
+        Exports all the geometry factor data
+
+        Output:
+        numpy array [value]
+
+        """
+        k_list = []
+        num_rdg = len(self.readings)
+        for k in range(num_rdg):
+            num_dipole = len(self.readings[k].Vdp)
+            for j in range(num_dipole):
+                if self.readings[k].Vdp[j].flagRho == "Accept":
+                    k_a = self.readings[k].Vdp[j].Vp
+                    k_list.append(k_a)
+        return np.asarray(k_list)
+
+    def getApparentChageability(self):
+        """
+        Exports all the apparent chargeability data
+
+        Output:
+        numpy array [value]
+
+        """
+        chargeability_list = []
+        num_rdg = len(self.readings)
+        for k in range(num_rdg):
+            num_dipole = len(self.readings[k].Vdp)
+            for j in range(num_dipole):
+                mx_a = self.readings[k].Vdp[j].Mx
+                chargeability_list.append(mx_a)
+        return np.asarray(chargeability_list)
+
+    def getSources(self, dipole=False):
+        """
+        Exports all the tx locations to a numpy array
+
+        Output:
+        numpy array [x0,y0,z0,x1,y1,z1] (c1,c2)
+
+        """
+
+        src_list = []
+        num_rdg = len(self.readings)
+        if not dipole:
+            for k in range(num_rdg):
+                tx = np.array([self.readings[k].Idp.Tx1East,
+                              self.readings[k].Idp.Tx1North,
+                              self.readings[k].Idp.Tx1Elev,
+                              self.readings[k].Idp.Tx2East,
+                              self.readings[k].Idp.Tx2North,
+                              self.readings[k].Idp.Tx2Elev])
+                src_list.append(tx)
+        else:
+            for k in range(num_rdg):
+                num_dipole = len(self.readings[k].Vdp)
+                for j in range(num_dipole):
+                    tx = np.array([self.readings[k].Idp.Tx1East,
+                                  self.readings[k].Idp.Tx1North,
+                                  self.readings[k].Idp.Tx1Elev,
+                                  self.readings[k].Idp.Tx2East,
+                                  self.readings[k].Idp.Tx2North,
+                                  self.readings[k].Idp.Tx2Elev])
+                    src_list.append(tx)
+        # number_of_src = len(src_list)
+        # src = np.zeros((number_of_src, 6))
+        # for tx in range(number_of_src):
+        #     src[tx, :] = src_list[tx]
+        return np.asarray(src_list)
+
+    def getSources2(self, dipole=False):
+        """
+        Exports all the tx locations to a numpy array
+
+        Output:
+        numpy array [x0,y0,z0,x1,y1,z1] (c1,c2)
+
+        """
+
+        src_list = []
+        num_rdg = len(self.readings)
+        if not dipole:
+            for k in range(num_rdg):
+                tx = np.array([self.readings[k].Idp.Tx1East,
+                              self.readings[k].Idp.Tx1North,
+                              self.readings[k].Idp.Tx1Elev])
+                src_list.append(tx)
+        else:
+            for k in range(num_rdg):
+                num_dipole = len(self.readings[k].Vdp)
+                for j in range(num_dipole):
+                    tx = np.array([self.readings[k].Idp.Tx1East,
+                                  self.readings[k].Idp.Tx1North,
+                                  self.readings[k].Idp.Tx1Elev])
+                    src_list.append(tx)
+        # number_of_src = len(src_list)
+        # src = np.zeros((number_of_src, 6))
+        # for tx in range(number_of_src):
+        #     src[tx, :] = src_list[tx]
+        return np.asarray(src_list)
+
+    def getDipoles(self):
+        """
+        Exports all the tx locations to a numpy array
+
+        Output:
+        numpy array [x0,y0,z0,x1,y1,z1] (p1,p2)
+
+        """
+
+        dipole_list = []
+        num_rdg = len(self.readings)
+        for k in range(num_rdg):
+            num_dipole = len(self.readings[k].Vdp)
+            for j in range(num_dipole):
+                rx = np.array([self.readings[k].Vdp[j].Rx1East,
+                              self.readings[k].Vdp[j].Rx1North,
+                              self.readings[k].Vdp[j].Rx1Elev,
+                              self.readings[k].Vdp[j].Rx2East,
+                              self.readings[k].Vdp[j].Rx2North,
+                              self.readings[k].Vdp[j].Rx2Elev])
+                dipole_list.append(rx)
+        number_of_dipoles = len(dipole_list)
+        dipoles = np.zeros((number_of_dipoles, 6))
+        for rx in range(number_of_dipoles):
+            dipoles[rx, :] = dipole_list[rx]
+        return dipoles
+    
     def createDcSurvey(self, data_type):
         """
         Loads a dias data file to a SimPEG "srcList" class
@@ -947,15 +1202,13 @@ class Jpatch:
         Input:
         datatype = Choose either IP or DC
 
-        Note: elevation is -ve for simPEG inversion
+        Note: elevation is +ve for simPEG inversion
 
         """
-
+        doff = 0                                      # in case offset is require
         srcLists = []                                 # Injections + dipoles
         data = []                                     # data from file
         d_weights = []                                # weights for the data
-        xpp = []
-        ypp = []
         num_rdg = len(self.readings)
         minE = self.readings[0].Idp.Tx2East
         minN = self.readings[0].Idp.Tx2North
@@ -963,13 +1216,23 @@ class Jpatch:
         maxE = minE
         for k in range(num_rdg):
             num_dipole = len(self.readings[k].Vdp)
-            rx = np.zeros((num_dipole, 6))
+            num_dipole_count = 0
+            for i in range(num_dipole):
+                if data_type == "DC":
+                    if (self.readings[k].Vdp[i].flagRho == "Accept"):
+                        num_dipole_count += 1
+                if data_type == "IP":
+                    if self.readings[k].Vdp[i].flagMx == "Accept":
+                        num_dipole_count += 1
+            rx = np.zeros((num_dipole_count, 6))
             tx = np.array([self.readings[k].Idp.Tx1East,
                           self.readings[k].Idp.Tx1North,
-                          -self.readings[k].Idp.Tx1Elev,
+                          self.readings[k].Idp.Tx1Elev - doff,
+                          # 0,
                           self.readings[k].Idp.Tx2East,
                           self.readings[k].Idp.Tx2North,
-                          -self.readings[k].Idp.Tx2Elev])
+                          self.readings[k].Idp.Tx2Elev - doff])
+                          # 0])
             if self.readings[k].Idp.Tx1East > maxE:
                 maxE = self.readings[k].Idp.Tx1East
             if self.readings[k].Idp.Tx1East < minE:
@@ -978,42 +1241,51 @@ class Jpatch:
                 maxN = self.readings[k].Idp.Tx1North
             if self.readings[k].Idp.Tx1North < minN:
                 minN = self.readings[k].Idp.Tx1North
-
+            cnt = 0
             for i in range(num_dipole):
-                try:
-                    xpp.append(self.readings[k].Idp.Tx1East)
-                    ypp.append(self.readings[k].Idp.Tx1Elev)
-                    rx[i, :] = [self.readings[k].Vdp[i].Rx1East,
-                                self.readings[k].Vdp[i].Rx1North,
-                                -self.readings[k].Vdp[i].Rx1Elev,
-                                self.readings[k].Vdp[i].Rx2East,
-                                self.readings[k].Vdp[i].Rx2North,
-                                -self.readings[k].Vdp[i].Rx2Elev]
-                    if data_type == "DC":
-                        data.append(self.readings[k].Vdp[i].Vp /
-                                    self.readings[k].Idp.In)
-                        d_weights.append((self.readings[k].Vdp[i].Vp /
-                                         self.readings[k].Idp.In) *
-                                         (self.readings[k].Vdp[i].Vp_err /
-                                          100.0))
-                    if data_type == "IP":
-                        data.append(self.readings[k].Vdp[i].Vp /
-                                    self.readings[k].Idp.In)
+                if data_type == "DC":
+                    if (self.readings[k].Vdp[i].flagRho == "Accept"):
+                        rx[cnt, :] = [self.readings[k].Vdp[i].Rx1East,
+                                      self.readings[k].Vdp[i].Rx1North,
+                                      self.readings[k].Vdp[i].Rx1Elev - doff,
+                                      # 0,
+                                      self.readings[k].Vdp[i].Rx2East,
+                                      self.readings[k].Vdp[i].Rx2North,
+                                      self.readings[k].Vdp[i].Rx2Elev - doff]
+                                      # 0]
+                        if self.readings[k].Vdp[i].K < 0:                        # correcting polarity for geometric factor
+                            data.append((self.readings[k].Vdp[i].Vp /
+                                        self.readings[k].Idp.In) * -1.0)
+                        else:
+                            data.append(self.readings[k].Vdp[i].Vp /
+                                        self.readings[k].Idp.In)
+                        d_weights.append((self.readings[k].Vdp[i].Vp_err +
+                                          self.readings[k].Idp.In_err) / 100.)
+                        cnt += 1
+                if data_type == "IP":
+                    if self.readings[k].Vdp[i].flagMx == "Accept":
+                        rx[cnt, :] = [self.readings[k].Vdp[i].Rx1East,
+                                      self.readings[k].Vdp[i].Rx1North,
+                                      self.readings[k].Vdp[i].Rx1Elev - doff,
+                                      self.readings[k].Vdp[i].Rx2East,
+                                      self.readings[k].Vdp[i].Rx2North,
+                                      self.readings[k].Vdp[i].Rx2Elev - doff]
+                        data.append(self.readings[k].Vdp[i].Mx)
                         d_weights.append((self.readings[k].Vdp[i].Mx *
                                          (self.readings[k].Vdp[i].Mx_err /
                                           100.0)))
-                except:
-                    pass
+                        cnt += 1
 
             Rx = DC.Rx.Dipole(rx[:, :3], rx[:, 3:])    # create dipole list
+            # srcLists.append(DC.Src.Pole([Rx], tx[:3]))
             srcLists.append(DC.Src.Dipole([Rx], tx[:3], tx[3:]))
 
         survey = DC.SurveyDC.Survey(srcLists)          # creates the survey
-        survey.dobs = np.asarray(data)                 # assigns data
+        survey.dobs = np.float64(np.asarray(data))                 # assigns data
         survey.std = np.asarray(d_weights)             # assign data weights
-        survey.eps = 0.
+        survey.eps = 0.001
 
-        return {'dc_survey': survey}
+        return survey
 
 
 class Jreadtxtline:
