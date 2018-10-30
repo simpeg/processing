@@ -349,9 +349,9 @@ class ensembleKernal(baseKernel):
         samples_per_ens = int((T_per_ensemble + overlap) * size_of_stack)
         number_of_ensembles = signal.size / (T_per_ensemble * size_of_stack)
         opt_number_of_samples = number_of_ensembles * T_per_ensemble * size_of_stack
-        print "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernal_ends.size)
+        print ("num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernal_ends.size))
         signal = signal[:opt_number_of_samples]
-        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks 
+        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks
         for index in range(number_of_ensembles):
             if index == 0:
                 T_overlap = T_per_ensemble                                # get end overlap
@@ -375,7 +375,7 @@ class ensembleKernal(baseKernel):
                 trim_signal = signal[start_index:end_index]
                 sub_signals.append(trim_signal)
                 sub_samples.append(np.arange(start_index, end_index))
-                print "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernel.size)
+                print ("num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernel.size))
                 Ax = np.reshape(trim_signal, (int(size_of_stack),
                                 int(self.kernel.size)), order='F')
                 shape_Ax = Ax.shape
@@ -962,7 +962,7 @@ class JvoltDipole:
             (self.Rx2y - self.Tx2y)**2 +
             (self.Rx2Elev - self.Tx2Elev)**2)**0.5
         gf = 1 / (( 1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
-        rho = (self.Vp / Idp.Vp) * 2 * np.pi * gf 
+        rho = (self.Vp / Idp.Vp) * 2 * np.pi * gf
         self.Rho = rho
         return rho
 
@@ -1194,7 +1194,7 @@ class Jpatch:
         for rx in range(number_of_dipoles):
             dipoles[rx, :] = dipole_list[rx]
         return dipoles
-    
+
     def createDcSurvey(self, data_type):
         """
         Loads a dias data file to a SimPEG "srcList" class
