@@ -1273,7 +1273,7 @@ class Jpatch:
                                       self.readings[k].Vdp[i].Rx2North,
                                       self.readings[k].Vdp[i].Rx2Elev - doff]
                         if ip_type is None:
-                            if self.readings[k].Vdp[i].k < 0:
+                            if self.readings[k].Vdp[i].K < 0:
                                 data.append(self.readings[k].Vdp[i].Mx) * -1.0
                             else:
                                 data.append(self.readings[k].Vdp[i].Mx)
