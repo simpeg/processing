@@ -349,9 +349,9 @@ class ensembleKernal(baseKernel):
         samples_per_ens = int((T_per_ensemble + overlap) * size_of_stack)
         number_of_ensembles = signal.size / (T_per_ensemble * size_of_stack)
         opt_number_of_samples = number_of_ensembles * T_per_ensemble * size_of_stack
-        print ("num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernal_ends.size))
+        print "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernal_ends.size)
         signal = signal[:opt_number_of_samples]
-        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks
+        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks 
         for index in range(number_of_ensembles):
             if index == 0:
                 T_overlap = T_per_ensemble                                # get end overlap
@@ -375,7 +375,7 @@ class ensembleKernal(baseKernel):
                 trim_signal = signal[start_index:end_index]
                 sub_signals.append(trim_signal)
                 sub_samples.append(np.arange(start_index, end_index))
-                print ("num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernel.size))
+                print "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernel.size)
                 Ax = np.reshape(trim_signal, (int(size_of_stack),
                                 int(self.kernel.size)), order='F')
                 shape_Ax = Ax.shape
@@ -870,6 +870,7 @@ class JvoltDipole:
 
     def __init__(self, VoltDpinfo):
         self.dipole = VoltDpinfo.DIPOLE
+        self.reading = VoltDpinfo.RDG
         self.Rx1File = VoltDpinfo.Rx1File
         self.Rx1East = float(VoltDpinfo.Rx1East)
         self.Rx1North = float(VoltDpinfo.Rx1North)
@@ -878,6 +879,7 @@ class JvoltDipole:
         self.Rx2East = float(VoltDpinfo.Rx2East)
         self.Rx2North = float(VoltDpinfo.Rx2North)
         self.Rx2Elev = float(VoltDpinfo.Rx2Elev)
+        self.K = float(VoltDpinfo.k)
         try:
             self.Vp = float(VoltDpinfo.Vp)
         except:
@@ -962,7 +964,7 @@ class JvoltDipole:
             (self.Rx2y - self.Tx2y)**2 +
             (self.Rx2Elev - self.Tx2Elev)**2)**0.5
         gf = 1 / (( 1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
-        rho = (self.Vp / Idp.Vp) * 2 * np.pi * gf
+        rho = (self.Vp / Idp.Vp) * 2 * np.pi * gf 
         self.Rho = rho
         return rho
 
@@ -1060,7 +1062,7 @@ class Jpatch:
         for k in range(num_rdg):
             num_dipole = len(self.readings[k].Vdp)
             for j in range(num_dipole):
-                if (self.readings[k].Vdp[j].flagRho == "Accept" and (2e5 > self.readings[k].Vdp[j].K > 5)):
+                if (self.readings[k].Vdp[j].flagRho == "Accept"):
                     k_a = self.readings[k].Vdp[j].K
                     k_list.append(k_a)
         return np.asarray(k_list)
@@ -1194,8 +1196,8 @@ class Jpatch:
         for rx in range(number_of_dipoles):
             dipoles[rx, :] = dipole_list[rx]
         return dipoles
-
-    def createDcSurvey(self, data_type):
+    
+    def createDcSurvey(self, data_type, ip_type=None):
         """
         Loads a dias data file to a SimPEG "srcList" class
 
@@ -1270,7 +1272,26 @@ class Jpatch:
                                       self.readings[k].Vdp[i].Rx2East,
                                       self.readings[k].Vdp[i].Rx2North,
                                       self.readings[k].Vdp[i].Rx2Elev - doff]
-                        data.append(self.readings[k].Vdp[i].Mx)
+                        if ip_type is None:
+                            if self.readings[k].Vdp[i].k < 0:
+                                data.append(self.readings[k].Vdp[i].Mx) * -1.0
+                            else:
+                                data.append(self.readings[k].Vdp[i].Mx)
+                        elif ip_type == "decay":
+                            if self.readings[k].Vdp[i].K < 0:
+                                data.append((self.readings[k].Vdp[i].Vs /
+                                            self.readings[k].Idp.In) * -1.0)
+                            else:
+                                data.append(self.readings[k].Vdp[i].Vs /
+                                            self.readings[k].Idp.In)
+                        else:
+                            if self.readings[k].Vdp[i].K < 0:
+                                data.append(self.readings[k].Vdp[i].Mx *
+                                           ((self.readings[k].Vdp[i].Vp / 1e3) / self.readings[k].Idp.In) * -1.0)
+                            else:
+                                data.append(self.readings[k].Vdp[i].Mx *
+                                           ((self.readings[k].Vdp[i].Vp / 1e3) / self.readings[k].Idp.In))
+
                         d_weights.append((self.readings[k].Vdp[i].Mx *
                                          (self.readings[k].Vdp[i].Mx_err /
                                           100.0)))
