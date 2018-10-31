@@ -840,6 +840,10 @@ class JinDipole:
         self.Tx2East = float(InDpInfo.Tx2East)
         self.Tx2North = float(InDpInfo.Tx2North)
         self.Tx2Elev = float(InDpInfo.Tx2Elev)
+        self.Tx1x = float(InDpInfo.Tx1x)
+        self.Tx1y = float(InDpInfo.Tx1y)
+        self.Tx2x = float(InDpInfo.Tx2x)
+        self.Tx2y = float(InDpInfo.Tx2y)
         self.In = float(InDpInfo.In)
         self.In_err = float(InDpInfo.In_err)
 
@@ -879,6 +883,10 @@ class JvoltDipole:
     def __init__(self, VoltDpinfo):
         self.dipole = VoltDpinfo.DIPOLE
         self.reading = VoltDpinfo.RDG
+        self.Rx1x = float(VoltDpinfo.Rx1x)
+        self.Rx1y = float(VoltDpinfo.Rx1y)
+        self.Rx2x = float(VoltDpinfo.Rx2x)
+        self.Rx2y = float(VoltDpinfo.Rx2y)
         self.Rx1File = VoltDpinfo.Rx1File
         self.Rx1East = float(VoltDpinfo.Rx1East)
         self.Rx1North = float(VoltDpinfo.Rx1North)
@@ -959,20 +967,20 @@ class JvoltDipole:
         return z
 
     def calcRho(self, Idp):
-        r1 = ((self.Rx1x - self.Tx1x)**2 +
-            (self.Rx1y - self.Tx1y)**2 +
-            (self.Rx1Elev - self.Tx1Elev)**2)**0.5
-        r2 = ((self.Rx2x - self.Tx1x)**2 +
-            (self.Rx2y - self.Tx1y)**2 +
-            (self.Rx2Elev - self.Tx1Elev)**2)**0.5
-        r3 = ((self.Rx1x - self.Tx2x)**2 +
-            (self.Rx1y - self.Tx2y)**2 +
-            (self.Rx1Elev - self.Tx2Elev)**2)**0.5
-        r4 = ((self.Rx2x - self.Tx2x)**2 +
-            (self.Rx2y - self.Tx2y)**2 +
-            (self.Rx2Elev - self.Tx2Elev)**2)**0.5
+        r1 = ((self.Rx1East - Idp.Tx1East)**2 +
+              (self.Rx1North - Idp.Tx1North)**2 +
+              (self.Rx1Elev - Idp.Tx1Elev)**2)**0.5
+        r2 = ((self.Rx2East - Idp.Tx1East)**2 +
+              (self.Rx2North - Idp.Tx1North)**2 +
+              (self.Rx2Elev - Idp.Tx1Elev)**2)**0.5
+        r3 = ((self.Rx1East - Idp.Tx2East)**2 +
+              (self.Rx1North - Idp.Tx2North)**2 +
+              (self.Rx1Elev - Idp.Tx2Elev)**2)**0.5
+        r4 = ((self.Rx2East - Idp.Tx2East)**2 +
+              (self.Rx2North - Idp.Tx2North)**2 +
+              (self.Rx2Elev - Idp.Tx2Elev)**2)**0.5
         gf = 1 / (( 1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
-        rho = (self.Vp / Idp.Vp) * 2 * np.pi * gf
+        rho = (self.Vp / Idp.In) * 2 * np.pi * gf
         self.Rho = rho
         return rho
 
@@ -1053,7 +1061,7 @@ class Jpatch:
             num_dipole = len(self.readings[k].Vdp)
             for j in range(num_dipole):
                 if self.readings[k].Vdp[j].flagRho == "Accept":
-                    rho_a = self.readings[k].Vdp[j].Rho
+                    rho_a = self.readings[k].Vdp[j].calcRho(self.readings[k].Idp)
                     resistivity_list.append(rho_a)
         return np.asarray(resistivity_list)
 
