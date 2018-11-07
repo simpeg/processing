@@ -3,7 +3,8 @@
 
 import numpy as np
 from scipy import fftpack
-from scipy import sparse
+# from scipy import sparse
+from scipy import signal
 from scipy.special import factorial
 from SimPEG.EM.Static import DC
 import properties
@@ -251,6 +252,95 @@ class decayKernal(baseKernel):
         return window_widths
 
 
+class frequencyWindowingKernal(baseKernel):
+    """
+       Frequency windowing kernal for evaluating frequencies
+       from a time-series recording
+    """
+
+    def __init__(self,
+                 eval_frequencies=None,
+                 window_overlap=None,
+                 output_type=None, **kwargs):
+        baseKernel.__init__(self, None, **kwargs)
+
+        if eval_frequencies is not None:
+            self.eval_frequencies = eval_frequencies
+            self.num_window = self.eval_frequencies.size
+            self.window_overlap = window_overlap
+            self.output_type = output_type
+        else:
+            raise Exception("need eval. frequencies: eval_frequencies")
+        # self.window_overlap = self.window_overlap / self.divsor
+
+    def _transform(self, time_series):
+        """
+        takes in stack data and returns decay
+        Input:
+        stack = Half period stacked Voltage data
+
+        """
+        # calculate weighted window decay data =============
+        if isinstance(time_series, np.ndarray):
+            print(self.output_type)
+            if time_series.shape.size > 1:         # check mxn - stack results
+                print("stacking similar frequency windows")
+            else:                                  # continue with windowing
+                print("windowing a single time-series")
+            # starts = self.getWindowStarts()
+            # # create window wieghts
+            # indx1 = np.arange(0, self.window_weight)
+            # # slepian goes here
+            # window = signal.slepian(51, width=0.3)
+            # weights = 0.5 - (0.5 *
+            #                  np.cos((2 * np.pi * indx1) /
+            #                         (indx1.size - 1)))
+            # # create new weights
+            # Wg = np.zeros(cntr)
+            # start_Wg = (indx1.size / 2.0 - 1.0) - (cntr / 2.0) + 1
+            # for r in range(Wg.size):
+            #     Wg[r] = weights[int(start_Wg) + r]
+            # # print Wg
+            # # create vector storing weighted values
+            # Vs_window = np.zeros(cntr)
+            # Vs_window_ave = np.zeros(cntr)
+            # # get window times
+            # w_idx = np.zeros(cntr)
+            # # assign total time and time step
+            # count = 0
+            # for i in range(time.size):
+            #     if time[i] >= start_tmp and time[i] <= end_tmp:
+            #         w_idx[count] = time[i]
+            #         Vs_window[count] = stack[i] * -1 * Wg[count]
+            #         Vs_window_ave[count] = stack[i] * -1
+            #         count += 1
+            # sumWin = np.sum(Vs_window)      # sum the values of the window
+            # vs_std[win] = np.std(Vs_window_ave)  # standard deviation of window
+            # # print Vs_window
+            # vsDecay[win] = sumWin / cntr
+        else:
+            raise Exception("input must be a stack numpy array!")
+            vsDecay = np.zeros(1)
+            # end decay =======================================
+        output = vsDecay
+        # output = vs_std
+        if self.output_type == 'std':
+            output = 0 #vs_std
+
+        return output
+
+    def getWindowStarts(self):
+        return self.window_starts
+
+    def getWindowWidths(self):
+        """
+           returns window widths
+        """
+        # window_widths = (np.asarray(self.window_ends) -
+        #                  np.asarray(self.window_starts))
+        return window_widths
+
+
 class filterKernal(baseKernel):
     """
         Filter Kernal for stacking a time-series
@@ -349,13 +439,9 @@ class ensembleKernal(baseKernel):
         samples_per_ens = int((T_per_ensemble + overlap) * size_of_stack)
         number_of_ensembles = signal.size / (T_per_ensemble * size_of_stack)
         opt_number_of_samples = number_of_ensembles * T_per_ensemble * size_of_stack
-        print(
-            "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(
-                number_of_ensembles, T_per_ensemble, self.kernal_ends.size
-            )
-        )
+        print("num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernal_ends.size))
         signal = signal[:opt_number_of_samples]
-        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks
+        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks 
         for index in range(number_of_ensembles):
             if index == 0:
                 T_overlap = T_per_ensemble                                # get end overlap
@@ -379,11 +465,7 @@ class ensembleKernal(baseKernel):
                 trim_signal = signal[start_index:end_index]
                 sub_signals.append(trim_signal)
                 sub_samples.append(np.arange(start_index, end_index))
-                print(
-                    "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(
-                        number_of_ensembles, T_per_ensemble, self.kernel.size
-                    )
-                )
+                print("num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernel.size))
                 Ax = np.reshape(trim_signal, (int(size_of_stack),
                                 int(self.kernel.size)), order='F')
                 shape_Ax = Ax.shape
@@ -432,6 +514,17 @@ class ensembleKernal(baseKernel):
 
 ##################################################
 # define methods
+##################################################
+# define methods
+def getFFT(signal):
+    """
+       :rtype numpy array
+       :return: frequeny response of the filter kernal
+    """
+    v_fft = fftpack.fft(signal)
+    return v_fft[0:int(v_fft.size / 2 - 1)] / np.max(v_fft)
+
+
 def getFrequnceyResponse(signal):
     """
        :rtype numpy array
@@ -439,7 +532,22 @@ def getFrequnceyResponse(signal):
     """
     v_fft = fftpack.fft(signal)
     amplitude = np.sqrt(v_fft.real**2 + v_fft.imag**2)
-    return amplitude[0:(amplitude.size / 2 - 1)] / np.max(amplitude)
+    return amplitude[0:(int(amplitude.size / 2 - 1))] / np.max(amplitude)
+
+
+def getCrossCorrelation(signal1, signal2):
+    x_corr = np.correlate(signal1, signal2, mode='full')
+    return x_corr / np.max(np.abs(x_corr))
+
+
+def getSpectralDensity(signal):
+    """
+       X_d(f)X_d^*(f)
+    """
+    signal_f = fftpack.fft(signal)
+    signal_f_conj = np.conjugate(signal_f)
+    S_xx = signal_f * signal_f_conj
+    return S_xx[0:int(S_xx.size / 2 - 1)] / np.max(np.abs(S_xx))
 
 
 def getPhaseResponse(signal):
@@ -552,6 +660,27 @@ def getColeCole(mx_decay,
     return c[c_idx], tau[tau_idx], cole_m[c_idx, tau_idx], minErr, v_cole
 
 
+def padNextPower2(ts, num_ensembles=1):
+    """
+    Input: numpy time-series
+    returns: a zeros padded time-series
+    rtype: numpy array
+    - if ensemble option is chosen, the time-series is arranged
+      in a nxm numpy array
+
+    NOTE: Primary meant for Qmag and MT processing
+    """
+    if num_ensembles == 1:
+        next_2 = 1 << (ts.size - 1).bit_length()
+        diff_in_size = next_2 - ts.size
+        pad = np.zeros(diff_in_size)
+        return np.concatenate((ts, pad), axis=0)
+    elif num_ensembles > 1:
+        return None
+    else:
+        return None
+
+
 def getBestFitColeCole(mx_decay,
                        init_cond,
                        init_tau,
@@ -582,7 +711,6 @@ def getBestFitColeCole(mx_decay,
         elif delta_error < 0.002:
             print("convergence accomplished! DONE")
             break
-
 
 
 def getWeightedVs(stack, window_start, window_end, attenuation):
@@ -661,6 +789,10 @@ def createBruteStackWindow(num_points):
     f1 = f1 / (4.0 * (num_points - 2))
 
     return f1
+
+
+def createSlepianWindow(num_size, attenuation):
+    return signal.slepian(num_size, width=attenuation)
 
 
 def createKaiserWindow(num_taps, attenuation):
@@ -822,6 +954,7 @@ def loadDias(fileName):
     patch.assignHeaderInfo(headers)
     return patch
 
+
 # ===================================================
 # Dias Data specific class
 class JinDipole:
@@ -840,7 +973,11 @@ class JinDipole:
         self.Tx2East = float(InDpInfo.Tx2East)
         self.Tx2North = float(InDpInfo.Tx2North)
         self.Tx2Elev = float(InDpInfo.Tx2Elev)
-        self.In = float(InDpInfo.In)
+        self.Tx1x = float(InDpInfo.Tx1x)
+        self.Tx1y = float(InDpInfo.Tx1y)
+        self.Tx2x = float(InDpInfo.Tx2x)
+        self.Tx2y = float(InDpInfo.Tx2y)
+        self.In = np.abs(float(InDpInfo.In))
         self.In_err = float(InDpInfo.In_err)
 
     def getTxStack(self, stack_dir):
@@ -879,6 +1016,10 @@ class JvoltDipole:
     def __init__(self, VoltDpinfo):
         self.dipole = VoltDpinfo.DIPOLE
         self.reading = VoltDpinfo.RDG
+        self.Rx1x = float(VoltDpinfo.Rx1x)
+        self.Rx1y = float(VoltDpinfo.Rx1y)
+        self.Rx2x = float(VoltDpinfo.Rx2x)
+        self.Rx2y = float(VoltDpinfo.Rx2y)
         self.Rx1File = VoltDpinfo.Rx1File
         self.Rx1East = float(VoltDpinfo.Rx1East)
         self.Rx1North = float(VoltDpinfo.Rx1North)
@@ -958,21 +1099,41 @@ class JvoltDipole:
         z = -(r / 3.)
         return z
 
+    def calcGeoFactor(self, Idp):
+        r1 = ((self.Rx1East - Idp.Tx1East)**2 +
+              (self.Rx1North - Idp.Tx1North)**2 +
+              (self.Rx1Elev - Idp.Tx1Elev)**2)**0.5
+        r2 = ((self.Rx2East - Idp.Tx1East)**2 +
+              (self.Rx2North - Idp.Tx1North)**2 +
+              (self.Rx2Elev - Idp.Tx1Elev)**2)**0.5
+        r3 = ((self.Rx1East - Idp.Tx2East)**2 +
+              (self.Rx1North - Idp.Tx2North)**2 +
+              (self.Rx1Elev - Idp.Tx2Elev)**2)**0.5
+        r4 = ((self.Rx2East - Idp.Tx2East)**2 +
+              (self.Rx2North - Idp.Tx2North)**2 +
+              (self.Rx2Elev - Idp.Tx2Elev)**2)**0.5
+        gf = 1 / ((1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
+        return 2 * np.pi * gf
+
     def calcRho(self, Idp):
-        r1 = ((self.Rx1x - self.Tx1x)**2 +
-            (self.Rx1y - self.Tx1y)**2 +
-            (self.Rx1Elev - self.Tx1Elev)**2)**0.5
-        r2 = ((self.Rx2x - self.Tx1x)**2 +
-            (self.Rx2y - self.Tx1y)**2 +
-            (self.Rx2Elev - self.Tx1Elev)**2)**0.5
-        r3 = ((self.Rx1x - self.Tx2x)**2 +
-            (self.Rx1y - self.Tx2y)**2 +
-            (self.Rx1Elev - self.Tx2Elev)**2)**0.5
-        r4 = ((self.Rx2x - self.Tx2x)**2 +
-            (self.Rx2y - self.Tx2y)**2 +
-            (self.Rx2Elev - self.Tx2Elev)**2)**0.5
-        gf = 1 / (( 1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
-        rho = (self.Vp / Idp.Vp) * 2 * np.pi * gf
+        r1 = ((self.Rx1East - Idp.Tx1East)**2 +
+              (self.Rx1North - Idp.Tx1North)**2 +
+              (self.Rx1Elev - Idp.Tx1Elev)**2)**0.5
+        r2 = ((self.Rx2East - Idp.Tx1East)**2 +
+              (self.Rx2North - Idp.Tx1North)**2 +
+              (self.Rx2Elev - Idp.Tx1Elev)**2)**0.5
+        r3 = ((self.Rx1East - Idp.Tx2East)**2 +
+              (self.Rx1North - Idp.Tx2North)**2 +
+              (self.Rx1Elev - Idp.Tx2Elev)**2)**0.5
+        r4 = ((self.Rx2East - Idp.Tx2East)**2 +
+              (self.Rx2North - Idp.Tx2North)**2 +
+              (self.Rx2Elev - Idp.Tx2Elev)**2)**0.5
+        gf = 1 / ((1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
+        Vp = np.abs(self.Vp)
+        if gf < 0:
+            Vp = Vp * -1
+        # print("Vp: {0}".format(self.Vp))
+        rho = (Vp / Idp.In) * 2 * np.pi * gf
         self.Rho = rho
         return rho
 
@@ -1053,7 +1214,7 @@ class Jpatch:
             num_dipole = len(self.readings[k].Vdp)
             for j in range(num_dipole):
                 if self.readings[k].Vdp[j].flagRho == "Accept":
-                    rho_a = self.readings[k].Vdp[j].Rho
+                    rho_a = self.readings[k].Vdp[j].calcRho(self.readings[k].Idp)
                     resistivity_list.append(rho_a)
         return np.asarray(resistivity_list)
 
@@ -1071,8 +1232,9 @@ class Jpatch:
             num_dipole = len(self.readings[k].Vdp)
             for j in range(num_dipole):
                 if (self.readings[k].Vdp[j].flagRho == "Accept"):
-                    k_a = self.readings[k].Vdp[j].K
-                    k_list.append(k_a)
+                    # k_a = self.readings[k].Vdp[j].K
+                    k_a = self.readings[k].Vdp[j].calcGeoFactor(self.readings[k].Idp)
+                    k_list.append(1 / k_a)
         return np.asarray(k_list)
 
     def getVoltages(self):
@@ -1263,12 +1425,10 @@ class Jpatch:
                                       self.readings[k].Vdp[i].Rx2North,
                                       self.readings[k].Vdp[i].Rx2Elev - doff]
                                       # 0]
-                        if self.readings[k].Vdp[i].K < 0:                        # correcting polarity for geometric factor
-                            data.append((self.readings[k].Vdp[i].Vp /
-                                        self.readings[k].Idp.In) * -1.0)
-                        else:
-                            data.append(self.readings[k].Vdp[i].Vp /
-                                        self.readings[k].Idp.In)
+                        Vp = np.abs(self.readings[k].Vdp[i].Vp)
+                        if self.readings[k].Vdp[i].K < 0:
+                            Vp = Vp * -1
+                        data.append(Vp / self.readings[k].Idp.In)
                         d_weights.append((self.readings[k].Vdp[i].Vp_err +
                                           self.readings[k].Idp.In_err) / 100.)
                         cnt += 1
@@ -1281,24 +1441,19 @@ class Jpatch:
                                       self.readings[k].Vdp[i].Rx2North,
                                       self.readings[k].Vdp[i].Rx2Elev - doff]
                         if ip_type is None:
-                            if self.readings[k].Vdp[i].K < 0:
-                                data.append(self.readings[k].Vdp[i].Mx * -1.0)
-                            else:
-                                data.append(self.readings[k].Vdp[i].Mx)
+                            data.append(self.readings[k].Vdp[i].Mx)
                         elif ip_type == "decay":
+                            Vs = np.abs(self.readings[k].Vdp[i].Vs)
                             if self.readings[k].Vdp[i].K < 0:
-                                data.append((self.readings[k].Vdp[i].Vs /
-                                            self.readings[k].Idp.In) * -1.0)
-                            else:
-                                data.append(self.readings[k].Vdp[i].Vs /
-                                            self.readings[k].Idp.In)
+                                Vs = Vs * -1
+                            data.append(self.readings[k].Vdp[i].Vs /
+                                        self.readings[k].Idp.In)
                         else:
-                            if self.readings[k].Vdp[i].K < 0:
-                                data.append(self.readings[k].Vdp[i].Mx *
-                                           ((self.readings[k].Vdp[i].Vp / 1e3) / self.readings[k].Idp.In) * -1.0)
-                            else:
-                                data.append(self.readings[k].Vdp[i].Mx *
-                                           ((self.readings[k].Vdp[i].Vp / 1e3) / self.readings[k].Idp.In))
+                            Vp = self.Vp
+                            if self.readings[k].K < 0:
+                                Vp = Vp * -1
+                            data.append(self.readings[k].Vdp[i].Mx *
+                                       ((Vp / 1e3) / self.readings[k].Idp.In))
 
                         d_weights.append((self.readings[k].Vdp[i].Mx *
                                          (self.readings[k].Vdp[i].Mx_err /
