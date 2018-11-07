@@ -844,7 +844,7 @@ class JinDipole:
         self.Tx1y = float(InDpInfo.Tx1y)
         self.Tx2x = float(InDpInfo.Tx2x)
         self.Tx2y = float(InDpInfo.Tx2y)
-        self.In = float(InDpInfo.In)
+        self.In = np.abs(float(InDpInfo.In))
         self.In_err = float(InDpInfo.In_err)
 
     def getTxStack(self, stack_dir):
@@ -966,6 +966,22 @@ class JvoltDipole:
         z = -(r / 3.)
         return z
 
+    def calcGeoFactor(self, Idp):
+        r1 = ((self.Rx1East - Idp.Tx1East)**2 +
+              (self.Rx1North - Idp.Tx1North)**2 +
+              (self.Rx1Elev - Idp.Tx1Elev)**2)**0.5
+        r2 = ((self.Rx2East - Idp.Tx1East)**2 +
+              (self.Rx2North - Idp.Tx1North)**2 +
+              (self.Rx2Elev - Idp.Tx1Elev)**2)**0.5
+        r3 = ((self.Rx1East - Idp.Tx2East)**2 +
+              (self.Rx1North - Idp.Tx2North)**2 +
+              (self.Rx1Elev - Idp.Tx2Elev)**2)**0.5
+        r4 = ((self.Rx2East - Idp.Tx2East)**2 +
+              (self.Rx2North - Idp.Tx2North)**2 +
+              (self.Rx2Elev - Idp.Tx2Elev)**2)**0.5
+        gf = 1 / ((1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
+        return 2 * np.pi * gf
+
     def calcRho(self, Idp):
         r1 = ((self.Rx1East - Idp.Tx1East)**2 +
               (self.Rx1North - Idp.Tx1North)**2 +
@@ -979,8 +995,12 @@ class JvoltDipole:
         r4 = ((self.Rx2East - Idp.Tx2East)**2 +
               (self.Rx2North - Idp.Tx2North)**2 +
               (self.Rx2Elev - Idp.Tx2Elev)**2)**0.5
-        gf = 1 / (( 1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
-        rho = (self.Vp / Idp.In) * 2 * np.pi * gf
+        gf = 1 / ((1 / r1 - 1 / r2) - (1 / r3 - 1 / r4))
+        Vp = np.abs(self.Vp)
+        if gf < 0:
+            Vp = Vp * -1
+        # print("Vp: {0}".format(self.Vp))
+        rho = (Vp / Idp.In) * 2 * np.pi * gf
         self.Rho = rho
         return rho
 
@@ -1079,8 +1099,9 @@ class Jpatch:
             num_dipole = len(self.readings[k].Vdp)
             for j in range(num_dipole):
                 if (self.readings[k].Vdp[j].flagRho == "Accept"):
-                    k_a = self.readings[k].Vdp[j].K
-                    k_list.append(k_a)
+                    # k_a = self.readings[k].Vdp[j].K
+                    k_a = self.readings[k].Vdp[j].calcGeoFactor(self.readings[k].Idp)
+                    k_list.append(1 / k_a)
         return np.asarray(k_list)
 
     def getVoltages(self):
@@ -1271,12 +1292,10 @@ class Jpatch:
                                       self.readings[k].Vdp[i].Rx2North,
                                       self.readings[k].Vdp[i].Rx2Elev - doff]
                                       # 0]
-                        if self.readings[k].Vdp[i].K < 0:                        # correcting polarity for geometric factor
-                            data.append((self.readings[k].Vdp[i].Vp /
-                                        self.readings[k].Idp.In) * -1.0)
-                        else:
-                            data.append(self.readings[k].Vdp[i].Vp /
-                                        self.readings[k].Idp.In)
+                        Vp = np.abs(self.readings[k].Vdp[i].Vp)
+                        if self.readings[k].Vdp[i].K < 0:
+                            Vp = Vp * -1
+                        data.append(Vp / self.readings[k].Idp.In)
                         d_weights.append((self.readings[k].Vdp[i].Vp_err +
                                           self.readings[k].Idp.In_err) / 100.)
                         cnt += 1
@@ -1289,24 +1308,19 @@ class Jpatch:
                                       self.readings[k].Vdp[i].Rx2North,
                                       self.readings[k].Vdp[i].Rx2Elev - doff]
                         if ip_type is None:
-                            if self.readings[k].Vdp[i].K < 0:
-                                data.append(self.readings[k].Vdp[i].Mx * -1.0)
-                            else:
-                                data.append(self.readings[k].Vdp[i].Mx)
+                            data.append(self.readings[k].Vdp[i].Mx)
                         elif ip_type == "decay":
+                            Vs = np.abs(self.readings[k].Vdp[i].Vs)
                             if self.readings[k].Vdp[i].K < 0:
-                                data.append((self.readings[k].Vdp[i].Vs /
-                                            self.readings[k].Idp.In) * -1.0)
-                            else:
-                                data.append(self.readings[k].Vdp[i].Vs /
-                                            self.readings[k].Idp.In)
+                                Vs = Vs * -1
+                            data.append(self.readings[k].Vdp[i].Vs /
+                                        self.readings[k].Idp.In)
                         else:
-                            if self.readings[k].Vdp[i].K < 0:
-                                data.append(self.readings[k].Vdp[i].Mx *
-                                           ((self.readings[k].Vdp[i].Vp / 1e3) / self.readings[k].Idp.In) * -1.0)
-                            else:
-                                data.append(self.readings[k].Vdp[i].Mx *
-                                           ((self.readings[k].Vdp[i].Vp / 1e3) / self.readings[k].Idp.In))
+                            Vp = self.Vp
+                            if self.readings[k].K < 0:
+                                Vp = Vp * -1
+                            data.append(self.readings[k].Vdp[i].Mx *
+                                       ((Vp / 1e3) / self.readings[k].Idp.In))
 
                         d_weights.append((self.readings[k].Vdp[i].Mx *
                                          (self.readings[k].Vdp[i].Mx_err /
