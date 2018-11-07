@@ -1449,15 +1449,15 @@ class Jpatch:
                             data.append(self.readings[k].Vdp[i].Vs /
                                         self.readings[k].Idp.In)
                         else:
-                            Vp = self.Vp
-                            if self.readings[k].K < 0:
+                            Vp = self.readings[k].Vdp[i].Vp
+                            if self.readings[k].Vdp[i].K < 0:
                                 Vp = Vp * -1
                             data.append(self.readings[k].Vdp[i].Mx *
-                                       ((Vp / 1e3) / self.readings[k].Idp.In))
+                                        ((Vp / 1e3) / self.readings[k].Idp.In))
 
                         d_weights.append((self.readings[k].Vdp[i].Mx *
-                                         (self.readings[k].Vdp[i].Mx_err /
-                                          100.0)))
+                                          (self.readings[k].Vdp[i].Mx_err /
+                                           100.0)))
                         cnt += 1
 
             Rx = DC.Rx.Dipole(rx[:, :3], rx[:, 3:])    # create dipole list
