@@ -3,8 +3,7 @@
 
 import numpy as np
 from scipy import fftpack
-# from scipy import sparse
-from scipy import signal
+from scipy import sparse
 from scipy.special import factorial
 from SimPEG.EM.Static import DC
 import properties
@@ -252,95 +251,6 @@ class decayKernal(baseKernel):
         return window_widths
 
 
-class frequencyWindowingKernal(baseKernel):
-    """
-       Frequency windowing kernal for evaluating frequencies
-       from a time-series recording
-    """
-
-    def __init__(self,
-                 eval_frequencies=None,
-                 window_overlap=None,
-                 output_type=None, **kwargs):
-        baseKernel.__init__(self, None, **kwargs)
-
-        if eval_frequencies is not None:
-            self.eval_frequencies = eval_frequencies
-            self.num_window = self.eval_frequencies.size
-            self.window_overlap = window_overlap
-            self.output_type = output_type
-        else:
-            raise Exception("need eval. frequencies: eval_frequencies")
-        # self.window_overlap = self.window_overlap / self.divsor
-
-    def _transform(self, time_series):
-        """
-        takes in stack data and returns decay
-        Input:
-        stack = Half period stacked Voltage data
-
-        """
-        # calculate weighted window decay data =============
-        if isinstance(time_series, np.ndarray):
-            print(self.output_type)
-            if time_series.shape.size > 1:         # check mxn - stack results
-                print("stacking similar frequency windows")
-            else:                                  # continue with windowing
-                print("windowing a single time-series")
-            # starts = self.getWindowStarts()
-            # # create window wieghts
-            # indx1 = np.arange(0, self.window_weight)
-            # # slepian goes here
-            # window = signal.slepian(51, width=0.3)
-            # weights = 0.5 - (0.5 *
-            #                  np.cos((2 * np.pi * indx1) /
-            #                         (indx1.size - 1)))
-            # # create new weights
-            # Wg = np.zeros(cntr)
-            # start_Wg = (indx1.size / 2.0 - 1.0) - (cntr / 2.0) + 1
-            # for r in range(Wg.size):
-            #     Wg[r] = weights[int(start_Wg) + r]
-            # # print Wg
-            # # create vector storing weighted values
-            # Vs_window = np.zeros(cntr)
-            # Vs_window_ave = np.zeros(cntr)
-            # # get window times
-            # w_idx = np.zeros(cntr)
-            # # assign total time and time step
-            # count = 0
-            # for i in range(time.size):
-            #     if time[i] >= start_tmp and time[i] <= end_tmp:
-            #         w_idx[count] = time[i]
-            #         Vs_window[count] = stack[i] * -1 * Wg[count]
-            #         Vs_window_ave[count] = stack[i] * -1
-            #         count += 1
-            # sumWin = np.sum(Vs_window)      # sum the values of the window
-            # vs_std[win] = np.std(Vs_window_ave)  # standard deviation of window
-            # # print Vs_window
-            # vsDecay[win] = sumWin / cntr
-        else:
-            raise Exception("input must be a stack numpy array!")
-            vsDecay = np.zeros(1)
-            # end decay =======================================
-        output = vsDecay
-        # output = vs_std
-        if self.output_type == 'std':
-            output = 0 #vs_std
-
-        return output
-
-    def getWindowStarts(self):
-        return self.window_starts
-
-    def getWindowWidths(self):
-        """
-           returns window widths
-        """
-        # window_widths = (np.asarray(self.window_ends) -
-        #                  np.asarray(self.window_starts))
-        return window_widths
-
-
 class filterKernal(baseKernel):
     """
         Filter Kernal for stacking a time-series
@@ -439,9 +349,13 @@ class ensembleKernal(baseKernel):
         samples_per_ens = int((T_per_ensemble + overlap) * size_of_stack)
         number_of_ensembles = signal.size / (T_per_ensemble * size_of_stack)
         opt_number_of_samples = number_of_ensembles * T_per_ensemble * size_of_stack
-        print("num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernal_ends.size))
+        print(
+            "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(
+                number_of_ensembles, T_per_ensemble, self.kernal_ends.size
+            )
+        )
         signal = signal[:opt_number_of_samples]
-        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks 
+        ensembles = np.zeros((size_of_stack, number_of_ensembles))         # matrix holding all the stacks
         for index in range(number_of_ensembles):
             if index == 0:
                 T_overlap = T_per_ensemble                                # get end overlap
@@ -465,7 +379,11 @@ class ensembleKernal(baseKernel):
                 trim_signal = signal[start_index:end_index]
                 sub_signals.append(trim_signal)
                 sub_samples.append(np.arange(start_index, end_index))
-                print("num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(number_of_ensembles, T_per_ensemble, self.kernel.size))
+                print(
+                    "num of ensembles: {0} & opt num: {1} & size of org sig: {2}".format(
+                        number_of_ensembles, T_per_ensemble, self.kernel.size
+                    )
+                )
                 Ax = np.reshape(trim_signal, (int(size_of_stack),
                                 int(self.kernel.size)), order='F')
                 shape_Ax = Ax.shape
@@ -514,17 +432,6 @@ class ensembleKernal(baseKernel):
 
 ##################################################
 # define methods
-##################################################
-# define methods
-def getFFT(signal):
-    """
-       :rtype numpy array
-       :return: frequeny response of the filter kernal
-    """
-    v_fft = fftpack.fft(signal)
-    return v_fft[0:int(v_fft.size / 2 - 1)] / np.max(v_fft)
-
-
 def getFrequnceyResponse(signal):
     """
        :rtype numpy array
@@ -532,6 +439,7 @@ def getFrequnceyResponse(signal):
     """
     v_fft = fftpack.fft(signal)
     amplitude = np.sqrt(v_fft.real**2 + v_fft.imag**2)
+<<<<<<< HEAD
     return amplitude[0:(int(amplitude.size / 2 - 1))] / np.max(amplitude)
 
 
@@ -548,6 +456,9 @@ def getSpectralDensity(signal):
     signal_f_conj = np.conjugate(signal_f)
     S_xx = signal_f * signal_f_conj
     return S_xx[0:int(S_xx.size / 2 - 1)] / np.max(np.abs(S_xx))
+=======
+    return amplitude[0:(amplitude.size / 2 - 1)] / np.max(amplitude)
+>>>>>>> parent of 4aad672... Updated MT & DCIP signal processing tools, restructured stacking algorithm
 
 
 def getPhaseResponse(signal):
@@ -660,27 +571,6 @@ def getColeCole(mx_decay,
     return c[c_idx], tau[tau_idx], cole_m[c_idx, tau_idx], minErr, v_cole
 
 
-def padNextPower2(ts, num_ensembles=1):
-    """
-    Input: numpy time-series
-    returns: a zeros padded time-series
-    rtype: numpy array
-    - if ensemble option is chosen, the time-series is arranged
-      in a nxm numpy array
-
-    NOTE: Primary meant for Qmag and MT processing
-    """
-    if num_ensembles == 1:
-        next_2 = 1 << (ts.size - 1).bit_length()
-        diff_in_size = next_2 - ts.size
-        pad = np.zeros(diff_in_size)
-        return np.concatenate((ts, pad), axis=0)
-    elif num_ensembles > 1:
-        return None
-    else:
-        return None
-
-
 def getBestFitColeCole(mx_decay,
                        init_cond,
                        init_tau,
@@ -711,6 +601,7 @@ def getBestFitColeCole(mx_decay,
         elif delta_error < 0.002:
             print("convergence accomplished! DONE")
             break
+
 
 
 def getWeightedVs(stack, window_start, window_end, attenuation):
@@ -790,10 +681,13 @@ def createBruteStackWindow(num_points):
 
     return f1
 
+<<<<<<< HEAD
 
 def createSlepianWindow(num_size, attenuation):
     return signal.slepian(num_size, width=attenuation)
 
+=======
+>>>>>>> parent of 4aad672... Updated MT & DCIP signal processing tools, restructured stacking algorithm
 
 def createKaiserWindow(num_taps, attenuation):
     """
@@ -953,7 +847,6 @@ def loadDias(fileName):
     headers = [header1, header2, header3, header4]
     patch.assignHeaderInfo(headers)
     return patch
-
 
 # ===================================================
 # Dias Data specific class
@@ -1444,20 +1337,29 @@ class Jpatch:
                             data.append(self.readings[k].Vdp[i].Mx)
                         elif ip_type == "decay":
                             Vs = np.abs(self.readings[k].Vdp[i].Vs)
+<<<<<<< HEAD
                             if self.readings[k].Vdp[i].K < 0:
                                 Vs = Vs * -1
                             data.append(self.readings[k].Vdp[i].Vs /
                                         self.readings[k].Idp.In)
                         else:
                             Vp = self.readings[k].Vdp[i].Vp
+=======
+>>>>>>> parent of 4aad672... Updated MT & DCIP signal processing tools, restructured stacking algorithm
                             if self.readings[k].Vdp[i].K < 0:
+                                Vs = Vs * -1
+                            data.append(self.readings[k].Vdp[i].Vs /
+                                        self.readings[k].Idp.In)
+                        else:
+                            Vp = self.Vp
+                            if self.readings[k].K < 0:
                                 Vp = Vp * -1
                             data.append(self.readings[k].Vdp[i].Mx *
-                                        ((Vp / 1e3) / self.readings[k].Idp.In))
+                                       ((Vp / 1e3) / self.readings[k].Idp.In))
 
                         d_weights.append((self.readings[k].Vdp[i].Mx *
-                                          (self.readings[k].Vdp[i].Mx_err /
-                                           100.0)))
+                                         (self.readings[k].Vdp[i].Mx_err /
+                                          100.0)))
                         cnt += 1
 
             Rx = DC.Rx.Dipole(rx[:, :3], rx[:, 3:])    # create dipole list
